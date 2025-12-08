@@ -1,12 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>fr.videoeditor</groupId>
-    <artifactId>video-editor-stacking</artifactId>
-    <!--        <artifactId>video-editor</artifactId>-->
+    <artifactId>video-editor</artifactId>
     <version>1.0-SNAPSHOT</version>
 
     <properties>
@@ -17,11 +17,11 @@
     </properties>
 
     <dependencies>
-        <!-- https://mvnrepository.com/artifact/org.bytedeco/javacv-platform -->
+        <!-- JavaCV pour la manipulation vidéo -->
         <dependency>
             <groupId>org.bytedeco</groupId>
             <artifactId>javacv-platform</artifactId>
-            <version>1.5.10</version>
+            <version>${javacv.version}</version>
         </dependency>
 
         <!-- FlatLaf pour l'interface moderne -->
@@ -29,6 +29,13 @@
             <groupId>com.formdev</groupId>
             <artifactId>flatlaf</artifactId>
             <version>3.4.1</version>
+        </dependency>
+        
+        <!-- FITS pour l'export astronomique -->
+        <dependency>
+            <groupId>gov.nasa.gsfc.heasarc</groupId>
+            <artifactId>nom-tam-fits</artifactId>
+            <version>1.20.1</version>
         </dependency>
     </dependencies>
 

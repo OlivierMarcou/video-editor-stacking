@@ -80,23 +80,38 @@ public class TimelinePanel extends JPanel {
                 double relativePos = (e.getX() - x1) / (double)(x2 - x1);
                 double timeInSegment = relativePos * segmentDuration;
                 
-                if (SwingUtilities.isLeftMouseButton(e)) {
-                    // Clic gauche = début de coupe
-                    segment.setStartTime(timeInSegment);
-                    if (segment.getEndTime() <= segment.getStartTime()) {
-                        segment.setEndTime(Math.min(segment.getStartTime() + 0.1, segment.getDuration()));
+                if (e.isShiftDown()) {
+                    // Shift + clic = définir les curseurs d'offset
+                    segment.setOffsetEnabled(true);
+                    if (SwingUtilities.isLeftMouseButton(e)) {
+                        segment.setOffsetStart(timeInSegment);
+                        if (segment.getOffsetEnd() <= segment.getOffsetStart()) {
+                            segment.setOffsetEnd(Math.min(timeInSegment + 0.1, segmentDuration));
+                        }
+                    } else if (SwingUtilities.isRightMouseButton(e)) {
+                        segment.setOffsetEnd(timeInSegment);
+                        if (segment.getOffsetStart() >= segment.getOffsetEnd()) {
+                            segment.setOffsetStart(Math.max(timeInSegment - 0.1, 0));
+                        }
                     }
-                    if (previewCallback != null) {
-                        previewCallback.onPreviewRequest(segment, timeInSegment);
-                    }
-                } else if (SwingUtilities.isRightMouseButton(e)) {
-                    // Clic droit = fin de coupe
-                    segment.setEndTime(timeInSegment);
-                    if (segment.getStartTime() >= segment.getEndTime()) {
-                        segment.setStartTime(Math.max(segment.getEndTime() - 0.1, 0));
-                    }
-                    if (previewCallback != null) {
-                        previewCallback.onPreviewRequest(segment, timeInSegment);
+                } else {
+                    // Clic normal = définir début/fin de coupe
+                    if (SwingUtilities.isLeftMouseButton(e)) {
+                        segment.setStartTime(timeInSegment);
+                        if (segment.getEndTime() <= segment.getStartTime()) {
+                            segment.setEndTime(Math.min(segment.getStartTime() + 0.1, segment.getDuration()));
+                        }
+                        if (previewCallback != null) {
+                            previewCallback.onPreviewRequest(segment, timeInSegment);
+                        }
+                    } else if (SwingUtilities.isRightMouseButton(e)) {
+                        segment.setEndTime(timeInSegment);
+                        if (segment.getStartTime() >= segment.getEndTime()) {
+                            segment.setStartTime(Math.max(segment.getEndTime() - 0.1, 0));
+                        }
+                        if (previewCallback != null) {
+                            previewCallback.onPreviewRequest(segment, timeInSegment);
+                        }
                     }
                 }
                 
@@ -194,12 +209,32 @@ public class TimelinePanel extends JPanel {
             }
             g2d.drawRect(x1, y, x2 - x1, SEGMENT_HEIGHT);
             
-            // Curseurs de début et fin
+            // Curseurs de début et fin (rouge et bleu)
             g2d.setColor(Color.RED);
             g2d.fillRect(startX - CURSOR_WIDTH/2, y, CURSOR_WIDTH, SEGMENT_HEIGHT);
             
             g2d.setColor(Color.BLUE);
             g2d.fillRect(endX - CURSOR_WIDTH/2, y, CURSOR_WIDTH, SEGMENT_HEIGHT);
+            
+            // Curseurs d'offset (orange) si activés
+            if (segment.isOffsetEnabled()) {
+                int offsetStartX = timeToX(currentTime + segment.getOffsetStart());
+                int offsetEndX = timeToX(currentTime + segment.getOffsetEnd());
+                
+                // Zone d'offset en fond orange transparent
+                g2d.setColor(new Color(255, 165, 0, 80));
+                g2d.fillRect(offsetStartX, y, offsetEndX - offsetStartX, SEGMENT_HEIGHT);
+                
+                // Curseurs d'offset en orange vif
+                g2d.setColor(new Color(255, 140, 0));
+                g2d.fillRect(offsetStartX - CURSOR_WIDTH/2, y, CURSOR_WIDTH, SEGMENT_HEIGHT);
+                g2d.fillRect(offsetEndX - CURSOR_WIDTH/2, y, CURSOR_WIDTH, SEGMENT_HEIGHT);
+                
+                // Label OFFSET
+                g2d.setColor(new Color(255, 140, 0));
+                g2d.setFont(new Font("Arial", Font.BOLD, 9));
+                g2d.drawString("OFFSET", offsetStartX + 5, y + 50);
+            }
             
             // Nom du fichier
             g2d.setColor(Color.WHITE);

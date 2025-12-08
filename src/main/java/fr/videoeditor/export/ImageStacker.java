@@ -7,10 +7,14 @@ import org.bytedeco.javacv.Java2DFrameConverter;
 import org.bytedeco.javacv.OpenCVFrameConverter;
 import org.bytedeco.opencv.opencv_core.*;
 import static org.bytedeco.opencv.global.opencv_core.*;
+import static org.bytedeco.opencv.global.opencv_imgproc.*;
+import nom.tam.fits.*;
+import nom.tam.util.*;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -43,10 +47,39 @@ public class ImageStacker {
                     grabber.setTimestamp(startTimestamp);
                     
                     List<Mat> frames = new ArrayList<>();
+                    List<Mat> offsetFrames = new ArrayList<>();
                     int frameCount = 0;
                     
                     publish("Collecte des frames...");
                     
+                    // Collecter les frames d'offset si activé
+                    if (segment.isOffsetEnabled()) {
+                        publish("Collecte des frames d'offset (dark frames)...");
+                        long offsetStartTimestamp = (long) (segment.getOffsetStart() * 1_000_000);
+                        long offsetEndTimestamp = (long) (segment.getOffsetEnd() * 1_000_000);
+                        
+                        grabber.setTimestamp(offsetStartTimestamp);
+                        
+                        while (true) {
+                            Frame frame = grabber.grabImage();
+                            if (frame == null) break;
+                            
+                            long timestamp = grabber.getTimestamp();
+                            if (timestamp > offsetEndTimestamp) break;
+                            
+                            Mat mat = matConverter.convert(frame);
+                            if (mat != null) {
+                                offsetFrames.add(mat.clone());
+                            }
+                        }
+                        
+                        publish(String.format("Frames d'offset collectées: %d", offsetFrames.size()));
+                        
+                        // Revenir au début du segment principal
+                        grabber.setTimestamp(startTimestamp);
+                    }
+                    
+                    // Collecter les frames principales
                     while (true) {
                         Frame frame = grabber.grabImage();
                         if (frame == null) break;
@@ -76,6 +109,9 @@ public class ImageStacker {
                     
                     if (frames.isEmpty()) {
                         publish("Aucune frame trouvée");
+                        for (Mat mat : offsetFrames) {
+                            mat.release();
+                        }
                         matConverter.close();
                         imageConverter.close();
                         return false;
@@ -83,8 +119,14 @@ public class ImageStacker {
                     
                     publish(String.format("Stacking de %d frames...", frames.size()));
                     
-                    // Stacker les images
-                    Mat result = stackImages(frames);
+                    // Stacker les images avec offset si disponible
+                    Mat result;
+                    if (!offsetFrames.isEmpty()) {
+                        publish("Application de la soustraction d'offset...");
+                        result = stackImagesWithOffset(frames, offsetFrames);
+                    } else {
+                        result = stackImages(frames);
+                    }
                     
                     // Nettoyer les frames
                     for (Mat mat : frames) {
@@ -92,15 +134,28 @@ public class ImageStacker {
                     }
                     frames.clear();
                     
-                    // Convertir en BufferedImage
-                    Frame resultFrame = matConverter.convert(result);
-                    BufferedImage image = imageConverter.convert(resultFrame);
-                    result.release();
+                    for (Mat mat : offsetFrames) {
+                        mat.release();
+                    }
+                    offsetFrames.clear();
                     
-                    // Sauvegarder
+                    // Sauvegarder selon le format
                     publish("Sauvegarde de l'image...");
-                    ImageIO.write(image, format, outputFile);
+                    if (format.equalsIgnoreCase("fits")) {
+                        saveFits(result, outputFile);
+                    } else {
+                        // Convertir en 8U pour PNG/JPG
+                        Mat output8U = new Mat();
+                        result.convertTo(output8U, CV_8U);
+                        
+                        Frame resultFrame = matConverter.convert(output8U);
+                        BufferedImage image = imageConverter.convert(resultFrame);
+                        ImageIO.write(image, format, outputFile);
+                        
+                        output8U.release();
+                    }
                     
+                    result.release();
                     matConverter.close();
                     imageConverter.close();
                     
@@ -121,6 +176,83 @@ public class ImageStacker {
                 }
             }
             
+            private void saveFits(Mat stackedMat, File outputFile) throws Exception {
+                // Convertir Mat en float 32 bits
+                Mat floatMat = new Mat();
+                stackedMat.convertTo(floatMat, CV_32F);
+                
+                int height = floatMat.rows();
+                int width = floatMat.cols();
+                int channels = floatMat.channels();
+                
+                if (channels == 3) {
+                    // Image couleur BGR - sauvegarder 3 plans
+                    MatVector bgr = new MatVector();
+                    split(floatMat, bgr);
+                    
+                    float[][][] data = new float[3][height][width];
+                    
+                    // Extraire les données de chaque canal
+                    for (int c = 0; c < 3; c++) {
+                        Mat channel = bgr.get(c);
+                        
+                        for (int y = 0; y < height; y++) {
+                            for (int x = 0; x < width; x++) {
+                                data[c][y][x] = channel.ptr(y).getFloat(x * 4);
+                            }
+                        }
+                        channel.release();
+                    }
+                    bgr.close();
+                    
+                    // Créer le fichier FITS
+                    Fits fits = new Fits();
+                    ImageHDU hdu = (ImageHDU) Fits.makeHDU(data);
+                    
+                    // Ajouter des métadonnées
+                    Header header = hdu.getHeader();
+                    header.addValue("COMMENT", "Stacked image from video frames", "");
+                    header.addValue("BITPIX", -32, "32-bit floating point");
+                    header.addValue("NAXIS", 3, "3 axes (color)");
+                    
+                    fits.addHDU(hdu);
+                    
+                    // Sauvegarder
+                    try (BufferedDataOutputStream dos = new BufferedDataOutputStream(
+                            new FileOutputStream(outputFile))) {
+                        fits.write(dos);
+                    }
+                } else {
+                    // Image en niveaux de gris
+                    float[][] data = new float[height][width];
+                    
+                    for (int y = 0; y < height; y++) {
+                        for (int x = 0; x < width; x++) {
+                            data[y][x] = floatMat.ptr(y).getFloat(x * 4);
+                        }
+                    }
+                    
+                    // Créer le fichier FITS
+                    Fits fits = new Fits();
+                    ImageHDU hdu = (ImageHDU) Fits.makeHDU(data);
+                    
+                    // Ajouter des métadonnées
+                    Header header = hdu.getHeader();
+                    header.addValue("COMMENT", "Stacked image from video frames", "");
+                    header.addValue("BITPIX", -32, "32-bit floating point");
+                    
+                    fits.addHDU(hdu);
+                    
+                    // Sauvegarder
+                    try (BufferedDataOutputStream dos = new BufferedDataOutputStream(
+                            new FileOutputStream(outputFile))) {
+                        fits.write(dos);
+                    }
+                }
+                
+                floatMat.release();
+            }
+            
             private Mat stackImages(List<Mat> frames) {
                 if (frames.isEmpty()) return null;
                 
@@ -139,12 +271,57 @@ public class ImageStacker {
                 divide(result, new Mat(result.size(), result.type(), 
                       Scalar.all(frames.size())), result);
                 
-                Mat output = new Mat();
-                result.convertTo(output, CV_8U);
-                result.release();
-                
-                return output;
+                return result;
             }
+            
+            private Mat stackImagesWithOffset(List<Mat> frames, List<Mat> offsetFrames) {
+                if (frames.isEmpty()) return null;
+                
+                // Créer le master dark (moyenne des frames d'offset)
+                Mat masterDark = new Mat();
+                offsetFrames.get(0).copyTo(masterDark);
+                masterDark.convertTo(masterDark, CV_32F);
+                
+                for (int i = 1; i < offsetFrames.size(); i++) {
+                    Mat temp = new Mat();
+                    offsetFrames.get(i).convertTo(temp, CV_32F);
+                    add(masterDark, temp, masterDark);
+                    temp.release();
+                }
+                
+                divide(masterDark, new Mat(masterDark.size(), masterDark.type(), 
+                      Scalar.all(offsetFrames.size())), masterDark);
+                
+                // Appliquer la soustraction d'offset et stacker
+                Mat result = new Mat();
+                Mat correctedFrame = new Mat();
+                
+                for (int i = 0; i < frames.size(); i++) {
+                    Mat frame32F = new Mat();
+                    frames.get(i).convertTo(frame32F, CV_32F);
+                    
+                    // Soustraire le master dark
+                    subtract(frame32F, masterDark, correctedFrame);
+                    
+                    if (i == 0) {
+                        correctedFrame.copyTo(result);
+                    } else {
+                        add(result, correctedFrame, result);
+                    }
+                    
+                    frame32F.release();
+                }
+                
+                // Moyenne
+                divide(result, new Mat(result.size(), result.type(), 
+                      Scalar.all(frames.size())), result);
+                
+                masterDark.release();
+                correctedFrame.release();
+                
+                return result;
+            }
+            
             
             @Override
             protected void process(List<String> chunks) {

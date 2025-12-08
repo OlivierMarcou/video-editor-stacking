@@ -48,27 +48,27 @@ video-editor/
 ## 📚 Guide de Lecture
 
 ### Pour Démarrer Rapidement
-**1. [QUICK_START.md](QUICK_START.md)** ⭐ **COMMENCEZ ICI**
+**1. [QUICK_START.md](./QUICK_START.md)** ⭐ **COMMENCEZ ICI**
    - Installation en 5 minutes
    - Tutoriel complet
    - Exemples pratiques
 
 ### Pour Comprendre le Projet
-**2. [README.md](README.md)**
+**2. [README.md](./README.md)**
    - Fonctionnalités détaillées
    - Guide d'utilisation complet
    - Architecture du projet
    - Troubleshooting
 
 ### Pour Visualiser l'Interface
-**3. [VISUAL_GUIDE.md](VISUAL_GUIDE.md)**
+**3. [VISUAL_GUIDE.md](./VISUAL_GUIDE.md)**
    - Schémas ASCII de l'UI
    - Explication des contrôles
    - Workflow visuel
    - États de la timeline
 
 ### Pour les Développeurs
-**4. [TECHNICAL_GUIDE.md](TECHNICAL_GUIDE.md)**
+**4. [TECHNICAL_GUIDE.md](./TECHNICAL_GUIDE.md)**
    - Architecture et patterns
    - Algorithmes de stacking
    - Optimisations possibles

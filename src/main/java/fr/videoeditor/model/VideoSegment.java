@@ -15,6 +15,9 @@ public class VideoSegment {
     private boolean stackingEnabled;
     private double stackingStart;
     private double stackingEnd;
+    private double offsetStart;  // début offset pour dark frames
+    private double offsetEnd;    // fin offset pour dark frames
+    private boolean offsetEnabled;
     
     public VideoSegment(File videoFile, double duration) {
         this.videoFile = videoFile;
@@ -23,6 +26,9 @@ public class VideoSegment {
         this.duration = duration;
         this.color = generateRandomColor();
         this.stackingEnabled = false;
+        this.offsetEnabled = false;
+        this.offsetStart = 0;
+        this.offsetEnd = 0;
     }
     
     private Color generateRandomColor() {
@@ -92,6 +98,30 @@ public class VideoSegment {
     
     public void setStackingEnd(double stackingEnd) {
         this.stackingEnd = stackingEnd;
+    }
+    
+    public double getOffsetStart() {
+        return offsetStart;
+    }
+    
+    public void setOffsetStart(double offsetStart) {
+        this.offsetStart = Math.max(0, Math.min(offsetStart, duration));
+    }
+    
+    public double getOffsetEnd() {
+        return offsetEnd;
+    }
+    
+    public void setOffsetEnd(double offsetEnd) {
+        this.offsetEnd = Math.max(0, Math.min(offsetEnd, duration));
+    }
+    
+    public boolean isOffsetEnabled() {
+        return offsetEnabled;
+    }
+    
+    public void setOffsetEnabled(boolean enabled) {
+        this.offsetEnabled = enabled;
     }
     
     @Override

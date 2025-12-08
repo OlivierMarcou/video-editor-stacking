@@ -230,7 +230,7 @@ public class VideoEditorFrame extends JFrame {
         panel.add(new JLabel("Format d'image:"), gbc);
         
         gbc.gridx = 1;
-        JComboBox<String> formatCombo = new JComboBox<>(new String[]{"png", "jpg"});
+        JComboBox<String> formatCombo = new JComboBox<>(new String[]{"png", "jpg", "fits"});
         panel.add(formatCombo, gbc);
         
         // Fichier de sortie
@@ -252,7 +252,7 @@ public class VideoEditorFrame extends JFrame {
         
         browseButton.addActionListener(e -> {
             JFileChooser chooser = new JFileChooser();
-            chooser.setFileFilter(new FileNameExtensionFilter("Images (*.png, *.jpg)", "png", "jpg"));
+            chooser.setFileFilter(new FileNameExtensionFilter("Images (*.png, *.jpg, *.fits)", "png", "jpg", "fits"));
             if (chooser.showSaveDialog(dialog) == JFileChooser.APPROVE_OPTION) {
                 String path = chooser.getSelectedFile().getAbsolutePath();
                 String format = (String) formatCombo.getSelectedItem();
@@ -269,7 +269,8 @@ public class VideoEditorFrame extends JFrame {
         gbc.gridwidth = 2;
         JTextArea infoArea = new JTextArea(
             "Le stacking combine toutes les frames du segment\n" +
-            "pour créer une seule image plus lumineuse.");
+            "pour créer une seule image plus lumineuse.\n" +
+            "FITS 32 bits: Format astronomique haute précision.");
         infoArea.setEditable(false);
         infoArea.setBackground(panel.getBackground());
         infoArea.setFont(new Font("Arial", Font.ITALIC, 11));
