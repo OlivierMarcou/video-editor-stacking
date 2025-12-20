@@ -14,10 +14,16 @@ import java.io.File;
 public class VideoPreviewPanel extends JPanel {
     private BufferedImage currentFrame;
     private String statusMessage = "Aucune vidéo chargée";
+    private double brightnessMultiplier = 1.0;
     
     public VideoPreviewPanel() {
         setPreferredSize(new Dimension(640, 360));
         setBackground(Color.BLACK);
+    }
+    
+    public void setBrightnessMultiplier(double multiplier) {
+        this.brightnessMultiplier = multiplier;
+        repaint();
     }
     
     public void loadFrame(File videoFile, double timeInSeconds) {
@@ -78,8 +84,14 @@ public class VideoPreviewPanel extends JPanel {
                             RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         
         if (currentFrame != null) {
+            // Appliquer la luminosité
+            BufferedImage displayFrame = currentFrame;
+            if (brightnessMultiplier != 1.0) {
+                displayFrame = applyBrightness(currentFrame, brightnessMultiplier);
+            }
+            
             // Calculer les dimensions pour maintenir le ratio
-            double imgRatio = (double) currentFrame.getWidth() / currentFrame.getHeight();
+            double imgRatio = (double) displayFrame.getWidth() / displayFrame.getHeight();
             double panelRatio = (double) getWidth() / getHeight();
             
             int drawWidth, drawHeight, x, y;
@@ -96,7 +108,7 @@ public class VideoPreviewPanel extends JPanel {
                 y = 0;
             }
             
-            g2d.drawImage(currentFrame, x, y, drawWidth, drawHeight, null);
+            g2d.drawImage(displayFrame, x, y, drawWidth, drawHeight, null);
         } else {
             // Afficher un message
             g2d.setColor(Color.LIGHT_GRAY);
@@ -107,5 +119,26 @@ public class VideoPreviewPanel extends JPanel {
             int msgY = getHeight() / 2;
             g2d.drawString(statusMessage, msgX, msgY);
         }
+    }
+    
+    private BufferedImage applyBrightness(BufferedImage source, double multiplier) {
+        BufferedImage result = new BufferedImage(source.getWidth(), source.getHeight(), source.getType());
+        for (int y = 0; y < source.getHeight(); y++) {
+            for (int x = 0; x < source.getWidth(); x++) {
+                int rgb = source.getRGB(x, y);
+                int a = (rgb >> 24) & 0xff;
+                int r = (rgb >> 16) & 0xff;
+                int g = (rgb >> 8) & 0xff;
+                int b = rgb & 0xff;
+                
+                r = Math.min(255, (int)(r * multiplier));
+                g = Math.min(255, (int)(g * multiplier));
+                b = Math.min(255, (int)(b * multiplier));
+                
+                int newRgb = (a << 24) | (r << 16) | (g << 8) | b;
+                result.setRGB(x, y, newRgb);
+            }
+        }
+        return result;
     }
 }

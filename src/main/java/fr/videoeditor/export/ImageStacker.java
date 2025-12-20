@@ -29,7 +29,7 @@ public class ImageStacker {
     }
     
     public static void stackSegment(VideoSegment segment, File outputFile, 
-                                   String format, ProgressListener listener) {
+                                   String format, double brightnessMultiplier, ProgressListener listener) {
         SwingWorker<Boolean, String> worker = new SwingWorker<>() {
             @Override
             protected Boolean doInBackground() throws Exception {
@@ -138,6 +138,12 @@ public class ImageStacker {
                         mat.release();
                     }
                     offsetFrames.clear();
+                    
+                    // Appliquer la luminosité
+                    if (brightnessMultiplier != 1.0) {
+                        multiply(result, new Mat(result.size(), result.type(), 
+                            Scalar.all(brightnessMultiplier)), result);
+                    }
                     
                     // Sauvegarder selon le format
                     publish("Sauvegarde de l'image...");

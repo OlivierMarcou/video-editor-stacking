@@ -12,6 +12,7 @@ import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.io.File;
+import java.util.prefs.Preferences;
 
 /**
  * Fenêtre principale de l'éditeur vidéo
@@ -21,12 +22,18 @@ public class VideoEditorFrame extends JFrame {
     private VideoPreviewPanel previewPanel;
     private JLabel statusLabel;
     private JProgressBar progressBar;
+    private JSlider brightnessSlider;
+    private double brightnessMultiplier = 1.0;
+    private Preferences prefs;
+    private static final String PREF_LAST_DIRECTORY = "lastDirectory";
     
     public VideoEditorFrame() {
         setTitle("Éditeur Vidéo - Java 21");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1200, 800);
         setLocationRelativeTo(null);
+        
+        prefs = Preferences.userNodeForPackage(VideoEditorFrame.class);
         
         initComponents();
     }
@@ -123,17 +130,59 @@ public class VideoEditorFrame extends JFrame {
         deleteButton.addActionListener(e -> deleteSelectedSegment());
         panel.add(deleteButton);
         
+        // Bouton retirer toutes les vidéos
+        JButton clearButton = new JButton("✖ Retirer Toutes");
+        clearButton.setFont(new Font("Arial", Font.BOLD, 12));
+        clearButton.addActionListener(e -> clearAllVideos());
+        panel.add(clearButton);
+        
+        panel.add(new JSeparator(SwingConstants.VERTICAL));
+        
+        // Slider de luminosité
+        JLabel brightnessLabel = new JLabel("Luminosité:");
+        brightnessLabel.setFont(new Font("Arial", Font.BOLD, 11));
+        panel.add(brightnessLabel);
+        
+        brightnessSlider = new JSlider(JSlider.HORIZONTAL, 10, 400, 100);
+        brightnessSlider.setPreferredSize(new Dimension(150, 30));
+        brightnessSlider.setMajorTickSpacing(100);
+        brightnessSlider.setMinorTickSpacing(10);
+        brightnessSlider.setPaintTicks(true);
+        brightnessSlider.setPaintLabels(true);
+        brightnessSlider.addChangeListener(e -> {
+            brightnessMultiplier = brightnessSlider.getValue() / 100.0;
+            previewPanel.setBrightnessMultiplier(brightnessMultiplier);
+            JLabel valueLabel = (JLabel) panel.getComponent(panel.getComponentCount() - 1);
+            valueLabel.setText(String.format("%.1fx", brightnessMultiplier));
+        });
+        panel.add(brightnessSlider);
+        
+        JLabel valueLabel = new JLabel("1.0x");
+        valueLabel.setFont(new Font("Arial", Font.BOLD, 11));
+        panel.add(valueLabel);
+        
         return panel;
     }
     
     private void loadVideo() {
         JFileChooser fileChooser = new JFileChooser();
+        
+        // Restaurer le dernier dossier
+        String lastDir = prefs.get(PREF_LAST_DIRECTORY, null);
+        if (lastDir != null) {
+            fileChooser.setCurrentDirectory(new File(lastDir));
+        }
+        
         fileChooser.setFileFilter(new FileNameExtensionFilter(
             "Fichiers vidéo (*.mp4, *.avi, *.mov, *.mkv)", 
             "mp4", "avi", "mov", "mkv"));
         
         if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             File videoFile = fileChooser.getSelectedFile();
+            
+            // Sauvegarder le dossier
+            prefs.put(PREF_LAST_DIRECTORY, videoFile.getParent());
+            
             loadVideoFile(videoFile);
         }
     }
@@ -252,6 +301,13 @@ public class VideoEditorFrame extends JFrame {
         
         browseButton.addActionListener(e -> {
             JFileChooser chooser = new JFileChooser();
+            
+            // Restaurer le dernier dossier
+            String lastDir = prefs.get(PREF_LAST_DIRECTORY, null);
+            if (lastDir != null) {
+                chooser.setCurrentDirectory(new File(lastDir));
+            }
+            
             chooser.setFileFilter(new FileNameExtensionFilter("Images (*.png, *.jpg, *.fits)", "png", "jpg", "fits"));
             if (chooser.showSaveDialog(dialog) == JFileChooser.APPROVE_OPTION) {
                 String path = chooser.getSelectedFile().getAbsolutePath();
@@ -260,6 +316,9 @@ public class VideoEditorFrame extends JFrame {
                     path += "." + format;
                 }
                 fileField.setText(path);
+                
+                // Sauvegarder le dossier
+                prefs.put(PREF_LAST_DIRECTORY, chooser.getSelectedFile().getParent());
             }
         });
         
@@ -293,7 +352,7 @@ public class VideoEditorFrame extends JFrame {
             progressBar.setValue(0);
             statusLabel.setText("Stacking en cours...");
             
-            ImageStacker.stackSegment(selected, outputFile, format, 
+            ImageStacker.stackSegment(selected, outputFile, format, brightnessMultiplier,
                 new ImageStacker.ProgressListener() {
                     @Override
                     public void onProgress(int current, int total, String message) {
@@ -353,6 +412,31 @@ public class VideoEditorFrame extends JFrame {
             timelinePanel.getSegments().remove(selected);
             timelinePanel.repaint();
             statusLabel.setText("Segment supprimé");
+        }
+    }
+    
+    private void clearAllVideos() {
+        if (timelinePanel.getSegments().isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Aucune vidéo chargée",
+                "Timeline vide",
+                JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        int result = JOptionPane.showConfirmDialog(this,
+            "Voulez-vous vraiment retirer toutes les vidéos (" + 
+            timelinePanel.getSegments().size() + " segment(s))?\n" +
+            "Cette action ne peut pas être annulée.",
+            "Confirmer la suppression",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE);
+        
+        if (result == JOptionPane.YES_OPTION) {
+            timelinePanel.getSegments().clear();
+            timelinePanel.repaint();
+            previewPanel.clearFrame();
+            statusLabel.setText("Toutes les vidéos ont été retirées");
         }
     }
     
@@ -418,9 +502,19 @@ public class VideoEditorFrame extends JFrame {
         
         browseButton.addActionListener(e -> {
             JFileChooser chooser = new JFileChooser();
+            
+            // Restaurer le dernier dossier
+            String lastDir = prefs.get(PREF_LAST_DIRECTORY, null);
+            if (lastDir != null) {
+                chooser.setCurrentDirectory(new File(lastDir));
+            }
+            
             chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
             if (chooser.showDialog(dialog, "Sélectionner") == JFileChooser.APPROVE_OPTION) {
                 folderField.setText(chooser.getSelectedFile().getAbsolutePath());
+                
+                // Sauvegarder le dossier
+                prefs.put(PREF_LAST_DIRECTORY, chooser.getSelectedFile().getAbsolutePath());
             }
         });
         
@@ -493,6 +587,13 @@ public class VideoEditorFrame extends JFrame {
         }
         
         JFileChooser fileChooser = new JFileChooser();
+        
+        // Restaurer le dernier dossier
+        String lastDir = prefs.get(PREF_LAST_DIRECTORY, null);
+        if (lastDir != null) {
+            fileChooser.setCurrentDirectory(new File(lastDir));
+        }
+        
         fileChooser.setFileFilter(new FileNameExtensionFilter("Fichier MP4 (*.mp4)", "mp4"));
         fileChooser.setSelectedFile(new File("export_video.mp4"));
         
@@ -502,12 +603,15 @@ public class VideoEditorFrame extends JFrame {
                 outputFile = new File(outputFile.getAbsolutePath() + ".mp4");
             }
             
+            // Sauvegarder le dossier
+            prefs.put(PREF_LAST_DIRECTORY, outputFile.getParent());
+            
             final File finalOutputFile = outputFile;
             
             progressBar.setVisible(true);
             progressBar.setValue(0);
             
-            VideoExporter.exportVideo(timelinePanel.getSegments(), finalOutputFile, 
+            VideoExporter.exportVideo(timelinePanel.getSegments(), finalOutputFile, brightnessMultiplier,
                 new VideoExporter.ProgressListener() {
                     @Override
                     public void onProgress(int percent, String message) {

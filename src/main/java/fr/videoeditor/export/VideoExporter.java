@@ -3,6 +3,9 @@ package fr.videoeditor.export;
 import fr.videoeditor.model.VideoSegment;
 import org.bytedeco.ffmpeg.global.avcodec;
 import org.bytedeco.javacv.*;
+import org.bytedeco.opencv.opencv_core.*;
+import static org.bytedeco.opencv.global.opencv_core.*;
+import static org.bytedeco.ffmpeg.global.avcodec.*;
 import javax.swing.*;
 import java.io.File;
 import java.util.List;
@@ -18,7 +21,7 @@ public class VideoExporter {
     }
     
     public static void exportVideo(List<VideoSegment> segments, File outputFile, 
-                                   ProgressListener listener) {
+                                   double brightnessMultiplier, ProgressListener listener) {
         SwingWorker<Boolean, String> worker = new SwingWorker<>() {
             @Override
             protected Boolean doInBackground() throws Exception {
@@ -59,6 +62,13 @@ public class VideoExporter {
                     int totalFrames = 0;
                     for (VideoSegment segment : segments) {
                         double duration = segment.getSegmentDuration();
+                        
+                        // Soustraire la durée de l'offset si activé
+                        if (segment.isOffsetEnabled()) {
+                            double offsetDuration = segment.getOffsetEnd() - segment.getOffsetStart();
+                            duration -= offsetDuration;
+                        }
+                        
                         totalFrames += (int) (duration * frameRate);
                     }
                     
@@ -100,8 +110,18 @@ public class VideoExporter {
                 FFmpegFrameGrabber grabber = new FFmpegFrameGrabber(segment.getVideoFile());
                 grabber.start();
                 
+                OpenCVFrameConverter.ToMat matConverter = new OpenCVFrameConverter.ToMat();
+                
                 long startTimestamp = (long) (segment.getStartTime() * 1_000_000);
                 long endTimestamp = (long) (segment.getEndTime() * 1_000_000);
+                
+                // Calculer les zones d'offset si activées
+                long offsetStartTimestamp = 0;
+                long offsetEndTimestamp = 0;
+                if (segment.isOffsetEnabled()) {
+                    offsetStartTimestamp = (long) (segment.getOffsetStart() * 1_000_000);
+                    offsetEndTimestamp = (long) (segment.getOffsetEnd() * 1_000_000);
+                }
                 
                 grabber.setTimestamp(startTimestamp);
                 
@@ -111,6 +131,23 @@ public class VideoExporter {
                     
                     long timestamp = grabber.getTimestamp();
                     if (timestamp > endTimestamp) break;
+                    
+                    // Exclure les frames dans la zone d'offset (dark frames)
+                    if (segment.isOffsetEnabled() && 
+                        timestamp >= offsetStartTimestamp && 
+                        timestamp <= offsetEndTimestamp) {
+                        continue; // Skip cette frame
+                    }
+                    
+                    // Appliquer la luminosité si nécessaire
+                    if (brightnessMultiplier != 1.0 && frame.image != null) {
+                        Mat mat = matConverter.convert(frame);
+                        if (mat != null) {
+                            mat.convertTo(mat, -1, brightnessMultiplier, 0);
+                            frame = matConverter.convert(mat);
+                            mat.release();
+                        }
+                    }
                     
                     recorder.record(frame);
                     processedFrames++;
@@ -123,6 +160,7 @@ public class VideoExporter {
                 
                 grabber.stop();
                 grabber.release();
+                matConverter.close();
                 
                 return processedFrames;
             }
