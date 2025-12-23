@@ -141,7 +141,7 @@ public class VideoExporter {
                     
                     // Appliquer la luminosité si nécessaire
                     if (brightnessMultiplier != 1.0 && frame.image != null) {
-                        Mat mat = matConverter.convert(frame);
+                        org.bytedeco.opencv.opencv_core.Mat mat = matConverter.convert(frame);
                         if (mat != null) {
                             mat.convertTo(mat, -1, brightnessMultiplier, 0);
                             frame = matConverter.convert(mat);
