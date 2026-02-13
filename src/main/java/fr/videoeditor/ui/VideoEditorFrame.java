@@ -5,6 +5,8 @@ import fr.videoeditor.export.VideoExporter;
 import fr.videoeditor.export.FrameExtractor;
 import fr.videoeditor.export.ImageStacker;
 import fr.videoeditor.model.VideoSegment;
+import fr.videoeditor.ui.TimelinePanel;
+import fr.videoeditor.ui.VideoPreviewPanel;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.FFmpegFrameRecorder;
 import org.bytedeco.javacv.Frame;
@@ -24,6 +26,7 @@ public class VideoEditorFrame extends JFrame {
     private JProgressBar progressBar;
     private JSlider brightnessSlider;
     private double brightnessMultiplier = 1.0;
+    private JCheckBox applyOffsetCheckBox;
     private Preferences prefs;
     private static final String PREF_LAST_DIRECTORY = "lastDirectory";
     
@@ -178,6 +181,17 @@ public class VideoEditorFrame extends JFrame {
         JLabel valueLabel = new JLabel("1.0x");
         valueLabel.setFont(new Font("Arial", Font.BOLD, 11));
         panel.add(valueLabel);
+        
+        panel.add(new JSeparator(SwingConstants.VERTICAL));
+        
+        // Checkbox pour appliquer le traitement offset à l'export
+        applyOffsetCheckBox = new JCheckBox("📊 Traiter Offset à l'Export");
+        applyOffsetCheckBox.setFont(new Font("Arial", Font.BOLD, 12));
+        applyOffsetCheckBox.setToolTipText("<html>Calcule un Master Dark à partir des frames offset<br>" +
+                                          "et le soustrait de chaque frame exportée<br>" +
+                                          "(Réduit le bruit thermique comme pour le stacking)</html>");
+        applyOffsetCheckBox.setSelected(false);
+        panel.add(applyOffsetCheckBox);
         
         return panel;
     }
@@ -1480,7 +1494,10 @@ public class VideoEditorFrame extends JFrame {
             progressBar.setVisible(true);
             progressBar.setValue(0);
             
-            VideoExporter.exportVideo(timelinePanel.getSegments(), finalOutputFile, brightnessMultiplier,
+            boolean applyOffset = applyOffsetCheckBox.isSelected();
+            
+            VideoExporter.exportVideo(timelinePanel.getSegments(), finalOutputFile, 
+                                     brightnessMultiplier, applyOffset,
                 new VideoExporter.ProgressListener() {
                     @Override
                     public void onProgress(int percent, String message) {
@@ -1549,7 +1566,10 @@ public class VideoEditorFrame extends JFrame {
             progressBar.setVisible(true);
             progressBar.setValue(0);
             
-            VideoExporter.exportVideoAVI(timelinePanel.getSegments(), finalOutputFile, brightnessMultiplier,
+            boolean applyOffset = applyOffsetCheckBox.isSelected();
+            
+            VideoExporter.exportVideoAVI(timelinePanel.getSegments(), finalOutputFile, 
+                                        brightnessMultiplier, applyOffset,
                 new VideoExporter.ProgressListener() {
                     @Override
                     public void onProgress(int percent, String message) {
