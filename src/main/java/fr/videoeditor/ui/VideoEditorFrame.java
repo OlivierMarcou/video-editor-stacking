@@ -5,8 +5,6 @@ import fr.videoeditor.export.VideoExporter;
 import fr.videoeditor.export.FrameExtractor;
 import fr.videoeditor.export.ImageStacker;
 import fr.videoeditor.model.VideoSegment;
-import fr.videoeditor.ui.TimelinePanel;
-import fr.videoeditor.ui.VideoPreviewPanel;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.FFmpegFrameRecorder;
 import org.bytedeco.javacv.Frame;
@@ -125,7 +123,7 @@ public class VideoEditorFrame extends JFrame {
         
         panel.add(new JSeparator(SwingConstants.VERTICAL));
         
-        // Bouton exporter
+        // Bouton exporter MP4
         JButton exportButton = new JButton("💾 Exporter MP4");
         exportButton.setFont(new Font("Arial", Font.BOLD, 14));
         exportButton.setBackground(new Color(46, 125, 50));
@@ -133,6 +131,16 @@ public class VideoEditorFrame extends JFrame {
         exportButton.setOpaque(true);
         exportButton.addActionListener(e -> exportVideo());
         panel.add(exportButton);
+        
+        // Bouton exporter AVI sans perte
+        JButton exportAviButton = new JButton("🎬 Exporter AVI (Sans perte)");
+        exportAviButton.setFont(new Font("Arial", Font.BOLD, 14));
+        exportAviButton.setBackground(new Color(25, 118, 210));
+        exportAviButton.setForeground(Color.WHITE);
+        exportAviButton.setOpaque(true);
+        exportAviButton.setToolTipText("Export sans perte de qualité (codec FFV1)");
+        exportAviButton.addActionListener(e -> exportVideoAVI());
+        panel.add(exportAviButton);
         
         // Bouton supprimer segment
         JButton deleteButton = new JButton("🗑 Supprimer Segment");
@@ -1498,6 +1506,78 @@ public class VideoEditorFrame extends JFrame {
                             } else {
                                 JOptionPane.showMessageDialog(VideoEditorFrame.this,
                                     "Erreur lors de l'export:\n" + message,
+                                    "Erreur",
+                                    JOptionPane.ERROR_MESSAGE);
+                            }
+                        });
+                    }
+                });
+        }
+    }
+    
+    private void exportVideoAVI() {
+        if (timelinePanel.getSegments().isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Aucun segment à exporter. Veuillez charger au moins une vidéo.",
+                "Timeline vide",
+                JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        JFileChooser fileChooser = new JFileChooser();
+        
+        // Restaurer le dernier dossier
+        String lastDir = prefs.get(PREF_LAST_DIRECTORY, null);
+        if (lastDir != null) {
+            fileChooser.setCurrentDirectory(new File(lastDir));
+        }
+        
+        fileChooser.setFileFilter(new FileNameExtensionFilter("Fichier AVI sans perte (*.avi)", "avi"));
+        fileChooser.setSelectedFile(new File("export_video_lossless.avi"));
+        
+        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File outputFile = fileChooser.getSelectedFile();
+            if (!outputFile.getName().endsWith(".avi")) {
+                outputFile = new File(outputFile.getAbsolutePath() + ".avi");
+            }
+            
+            // Sauvegarder le dossier
+            prefs.put(PREF_LAST_DIRECTORY, outputFile.getParent());
+            
+            final File finalOutputFile = outputFile;
+            
+            progressBar.setVisible(true);
+            progressBar.setValue(0);
+            
+            VideoExporter.exportVideoAVI(timelinePanel.getSegments(), finalOutputFile, brightnessMultiplier,
+                new VideoExporter.ProgressListener() {
+                    @Override
+                    public void onProgress(int percent, String message) {
+                        SwingUtilities.invokeLater(() -> {
+                            if (percent >= 0) {
+                                progressBar.setValue(percent);
+                            }
+                            statusLabel.setText(message);
+                        });
+                    }
+                    
+                    @Override
+                    public void onComplete(boolean success, String message) {
+                        SwingUtilities.invokeLater(() -> {
+                            progressBar.setVisible(false);
+                            statusLabel.setText(message);
+                            
+                            if (success) {
+                                JOptionPane.showMessageDialog(VideoEditorFrame.this,
+                                    "Vidéo AVI exportée avec succès (sans perte)!\n" + 
+                                    "Fichier: " + finalOutputFile.getAbsolutePath() + "\n" +
+                                    "Codec: FFV1 (lossless)\n" +
+                                    "Taille: " + (finalOutputFile.length() / (1024*1024)) + " MB",
+                                    "Export AVI réussi",
+                                    JOptionPane.INFORMATION_MESSAGE);
+                            } else {
+                                JOptionPane.showMessageDialog(VideoEditorFrame.this,
+                                    "Erreur lors de l'export AVI:\n" + message,
                                     "Erreur",
                                     JOptionPane.ERROR_MESSAGE);
                             }

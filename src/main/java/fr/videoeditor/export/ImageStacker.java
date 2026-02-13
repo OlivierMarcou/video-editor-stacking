@@ -7,7 +7,7 @@ import org.bytedeco.javacv.Java2DFrameConverter;
 import org.bytedeco.javacv.OpenCVFrameConverter;
 import org.bytedeco.opencv.opencv_core.*;
 import static org.bytedeco.opencv.global.opencv_core.*;
-import static org.bytedeco.opencv.global.opencv_imgproc.*;
+
 import nom.tam.fits.*;
 import nom.tam.util.*;
 import javax.imageio.ImageIO;
